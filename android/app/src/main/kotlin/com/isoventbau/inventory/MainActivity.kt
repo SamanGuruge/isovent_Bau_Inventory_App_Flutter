@@ -1,4 +1,4 @@
-package com.isoventbau.isovent_bau_inventory_app
+package com.isoventbau.inventory
 
 import io.flutter.embedding.android.FlutterActivity
 

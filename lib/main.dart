@@ -1,122 +1,240 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'app_routes.dart';
+import 'firebase_options.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/lock_screen.dart';
+import 'screens/auth/otp_verification_screen.dart';
+import 'screens/auth/password_success_screen.dart';
+import 'screens/auth/register_screen.dart';
+import 'screens/auth/reset_password_screen.dart';
+import 'screens/errors/error_pages.dart';
+import 'screens/home_screen.dart';
+import 'screens/inventory/inventory_dashboard_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/inventory_repository.dart';
+
+IconData _otpIconFromArgs(Map<String, dynamic> args) {
+  final variant = (args['iconVariant'] as String?) ?? '';
+  switch (variant) {
+    case 'email':
+      return Icons.email_outlined;
+    case 'mail-read':
+      return Icons.mark_email_read_outlined;
+    case 'two-step':
+      return Icons.verified_user_outlined;
+    default:
+      return Icons.verified_user_outlined;
+  }
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint(
+    '[Firebase] initialized projectId=${Firebase.app().options.projectId}',
+  );
+  runApp(const IsoventInventoryApp());
+}
 
-  // This widget is the root of your application.
+class IsoventInventoryApp extends StatelessWidget {
+  const IsoventInventoryApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Isovent Inventory',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      routes: {
+        AppRoutes.login: (_) => const LoginScreen(),
+        AppRoutes.register: (_) => const RegisterScreen(),
+        AppRoutes.forgotPassword: (_) => const ForgotPasswordScreen(),
+        AppRoutes.forgotPasswordCentered: (_) =>
+            const ForgotPasswordCenteredScreen(),
+        AppRoutes.error404: (_) => const Error404Screen(),
+        AppRoutes.error500: (_) => const Error500Screen(),
+        '/inventory': (_) => const InventoryDashboardScreen(),
+        '/home': (_) => const HomeScreen(),
+      },
+      onGenerateRoute: (settings) {
+        final args = settings.arguments;
+        switch (settings.name) {
+          case AppRoutes.emailOtp:
+          case AppRoutes.twoStepOtp:
+            if (args is Map<String, dynamic>) {
+              return MaterialPageRoute(
+                builder: (_) => OtpVerificationScreen(
+                  flow: (args['flow'] ?? 'generic') as String,
+                  email: (args['email'] ?? 'demo@example.com') as String,
+                  title: (args['title'] ?? 'Email OTP Verification') as String,
+                  buttonText: (args['buttonText'] ?? 'Submit') as String,
+                  rightIcon: _otpIconFromArgs(args),
+                  name: args['name'] as String?,
+                  password: args['password'] as String?,
+                ),
+              );
+            }
+            return MaterialPageRoute(builder: (_) => const Error404Screen());
+          case AppRoutes.resetPassword:
+            final email = args is Map<String, dynamic>
+                ? (args['email'] as String? ?? '')
+                : '';
+            return MaterialPageRoute(
+              builder: (_) => ResetPasswordScreen(email: email),
+            );
+          case AppRoutes.passwordSuccess:
+            if (args is Map<String, dynamic>) {
+              return MaterialPageRoute(
+                builder: (_) => PasswordSuccessScreen(
+                  title: (args['title'] as String?) ?? 'Success',
+                  subtitle:
+                      (args['subtitle'] as String?) ??
+                      'Your new password has been successfully saved',
+                  buttonText:
+                      (args['buttonText'] as String?) ?? 'Back to Sign In',
+                ),
+              );
+            }
+            return MaterialPageRoute(
+              builder: (_) => const PasswordSuccessScreen(),
+            );
+          case AppRoutes.lock:
+            if (args is Map<String, dynamic>) {
+              return MaterialPageRoute(
+                builder: (_) => LockScreen(
+                  email: (args['email'] as String? ?? 'demo@example.com'),
+                  displayName: args['displayName'] as String?,
+                  photoUrl: args['photoUrl'] as String?,
+                ),
+              );
+            }
+            return MaterialPageRoute(
+              builder: (_) => const LockScreen(email: 'demo@example.com'),
+            );
+        }
+        return MaterialPageRoute(builder: (_) => const Error404Screen());
+      },
+      home: const AuthGate(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AuthGate> createState() => _AuthGateState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AuthGateState extends State<AuthGate> {
+  final _repo = InventoryRepository();
+  String? _seededUid;
+  bool _seeding = false;
+  bool _seedDoneForThisSession = false;
+  bool _seedScheduleQueued = false;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  void _resetSeedFlags() {
+    _seededUid = null;
+    _seeding = false;
+    _seedDoneForThisSession = false;
+    _seedScheduleQueued = false;
+  }
+
+  void _scheduleSeed(User user) {
+    final alreadySeeded = _seedDoneForThisSession && _seededUid == user.uid;
+    if (_seedScheduleQueued || _seeding || alreadySeeded) {
+      return;
+    }
+    _seedScheduleQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _seedScheduleQueued = false;
+      _seedForUser(user);
     });
+  }
+
+  Future<void> _seedForUser(User user) async {
+    final alreadySeeded = _seedDoneForThisSession && _seededUid == user.uid;
+    if (_seeding || alreadySeeded) {
+      return;
+    }
+    if (mounted) {
+      setState(() => _seeding = true);
+    }
+    try {
+      await _repo.ensureSeedData();
+      if (mounted) {
+        setState(() {
+          _seededUid = user.uid;
+          _seedDoneForThisSession = true;
+        });
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          return;
+        }
+        final details = e.toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Access denied while initializing inventory. Please check Firestore rules and sign in again.\n$details',
+            ),
+          ),
+        );
+        await FirebaseAuth.instance.signOut();
+      });
+      debugPrint('[Seed] initialization error: $e');
+      if (mounted) {
+        setState(() {
+          _seededUid = user.uid;
+          _seedDoneForThisSession = true;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _seeding = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final User? user = snapshot.data ?? FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          _resetSeedFlags();
+          return const LoginScreen();
+        }
+
+        _scheduleSeed(user);
+        if (_seeding && !_seedDoneForThisSession) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return const HomeScreen();
+      },
     );
   }
 }

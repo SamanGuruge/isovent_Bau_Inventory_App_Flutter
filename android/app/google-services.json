@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "714410252186",
+    "project_id": "isovent-bau-inventory-app",
+    "storage_bucket": "isovent-bau-inventory-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714410252186:android:2a30f5973925778ab30c23",
+        "android_client_info": {
+          "package_name": "com.isoventbau.inventory"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "714410252186-q5p29uvbufnmannnt0kgb5s0maqliubh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAfN3sxrfQcgDJvrVohJtx_5AmukbkHaU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "714410252186-q5p29uvbufnmannnt0kgb5s0maqliubh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
